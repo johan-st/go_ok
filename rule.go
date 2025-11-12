@@ -317,6 +317,16 @@ func AtLeastN[T any](n int, rules ...*Rule[T]) *Rule[T] {
 // PREDEFINED RULES
 // ----------------
 
+func String() *Rule[any] {
+	return Test("string", func(ctx context.Context, value any) error {
+		_, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("value is not a string")
+		}
+		return nil
+	})
+}
+
 // StringLength creates a rule for string length validation
 func StringLength(min, max int) *Rule[string] {
 	return Test("string-length", func(ctx context.Context, value string) error {
@@ -351,7 +361,7 @@ func StringContains(substring string) *Rule[string] {
 }
 
 // NumericRange creates a rule for numeric range validation
-func NumericRange[T int | int8 | int16| int64 | float64 | uint | uint8 | uint16 | uint32 | uint64](min, max T) *Rule[T] {
+func NumericRange[T int | int8 | int16| int32 | int64 | float32 | float64 | uint | uint8 | uint16 | uint32 | uint64](min, max T) *Rule[T] {
 	return Test("numeric-range", func(ctx context.Context, value T) error {
 		if value < min {
 			return fmt.Errorf("value too small (min: %v, got: %v)", min, value)

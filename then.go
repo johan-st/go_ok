@@ -12,7 +12,29 @@ type ThenRule[T, U any] struct {
 	Second    *Rule[U]
 }
 
-// Then creates a type-narrowing pipeline
+// Then creates a type-narrowing pipeline that validates a value of type T,
+// transforms it to type U, then validates the transformed value.
+//
+// # Example:
+//
+// 	pipeline := ok.Then(
+// 		ok.All(ok.Test("not-nil", func(ctx context.Context, v any) error {
+// 			if v == nil { return errors.New("required") }
+// 			return nil
+// 		})),
+// 		func(v any) (int, error) {
+// 			s, ok := v.(string)
+// 			if !ok { return 0, errors.New("must be string") }
+// 			var n int
+// 			_, err := fmt.Sscanf(s, "%d", &n)
+// 			if err != nil { return 0, errors.New("must be numeric") }
+// 			return n, nil
+// 		},
+// 		ok.All(
+// 			ok.NumericRange(10, 100),
+// 			ok.Not(ok.NumericRange(13,13)),
+// 		))
+// 	result, ok := pipeline.Validate(ctx, testString)
 func Then[T, U any](rule *Rule[T], transform func(T) (U, error), next *Rule[U]) *ThenRule[T, U] {
 	return &ThenRule[T, U]{
 		First:     rule,

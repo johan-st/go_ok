@@ -13,7 +13,7 @@ func TestBasicValidation(t *testing.T) {
 
 	// Test basic string validation
 	stringRule := All(
-		StringEmpty(),
+		Not(StringEmpty()),
 		StringLength(5, 100),
 		Test("email-format", func(ctx context.Context, s string) error {
 			if s == "" {
@@ -294,7 +294,7 @@ func TestOptional(t *testing.T) {
 	ctx := context.Background()
 
 	// Test empty value (should pass)
-	optionalRule := Optional(StringEmpty())
+	optionalRule := Optional(Not(StringEmpty()))
 	result, ok := optionalRule.Validate(ctx, "")
 	t.Logf("ok: %v, result: %+v", ok, result)
 	if !ok {
@@ -465,7 +465,7 @@ func TestStringLength(t *testing.T) {
 func TestNotEmpty(t *testing.T) {
 	ctx := context.Background()
 
-	notEmptyRule := StringEmpty()
+	notEmptyRule := Not(StringEmpty())
 
 	// Test non-empty
 	result, ok := notEmptyRule.Validate(ctx, "hello")
