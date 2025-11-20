@@ -343,7 +343,7 @@ func StringLength(min, max int) *Rule[string] {
 
 // StringEmpty creates a rule that ensures a string is not empty
 func StringEmpty() *Rule[string] {
-	return Test("not empty", func(ctx context.Context, value string) error {
+	return Test("string empty", func(ctx context.Context, value string) error {
 		if strings.TrimSpace(value) != "" {
 			return errors.New("string cannot be empty")
 		}

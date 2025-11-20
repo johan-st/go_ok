@@ -23,6 +23,7 @@ func getRunFuncs() (map[string]func(string), []string) {
 	funcRunBasicExamples := func(string) { examples.RunBasicExamples() }
 	funcEmail := func(testString string) { examples.Email(testString) }
 	funcNumeric := func(testString string) { examples.Numeric(testString) }
+
 	runValues := map[string]func(string){
 		"basic": funcRunBasicExamples,
 		"email": funcEmail,

@@ -27,6 +27,6 @@ func Numeric(testString any) {
 			ok.Not(ok.NumericRange(13,13)),
 		))
 	result, ok := pipeline.Validate(ctx, testString)
-	fmt.Printf("valid: %v, result: %+v\n", ok, result)
+	fmt.Printf("valid: %v\n", ok)
 	fmt.Println(result.Format())
 }

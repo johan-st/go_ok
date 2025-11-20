@@ -39,7 +39,7 @@ func TestThen(t *testing.T) {
 	// Test successful validation
 	result, ok := pipeline.Validate(ctx, "50")
 	if !ok {
-		t.Errorf("Expected validation to pass, got: %s", result.Format())
+		t.Errorf("Expected validation to pass, got:\n%s", result.Format())
 	}
 	if result.Status != StatusPass {
 		t.Error("Expected StatusPass")

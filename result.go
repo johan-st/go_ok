@@ -33,7 +33,7 @@ type Result struct {
 	Status   ResultStatus
 	Label    string
 	Kind     RuleKind
-	Message  string        // formatted at end, not during eval
+	Message  string // formatted at end, not during eval
 	Children []*Result
 }
 
@@ -51,17 +51,17 @@ func (r *Result) Format() string {
 
 func (r *Result) formatRecursive(sb *strings.Builder, depth int) {
 	indent := strings.Repeat("  ", depth)
-	
+
 	// Format the current node
 	status := r.Status.String()
 	if r.Message != "" {
-		sb.WriteString(fmt.Sprintf("%s[%s] %s (%s): %s\n", 
+		sb.WriteString(fmt.Sprintf("%s[%s] %s (%s): %s\n",
 			indent, status, r.Label, r.Kind.String(), r.Message))
 	} else {
-		sb.WriteString(fmt.Sprintf("%s[%s] %s (%s)\n", 
+		sb.WriteString(fmt.Sprintf("%s[%s] %s (%s)\n",
 			indent, status, r.Label, r.Kind.String()))
 	}
-	
+
 	// Format children
 	for _, child := range r.Children {
 		child.formatRecursive(sb, depth+1)
