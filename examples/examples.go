@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	ok "github.com/johan-st/gook"
 )
@@ -108,26 +109,51 @@ func RunBasicExamples() {
 }
 
 func Wip(val any) {
-	ctx:= context.Background()
+	ctx := context.Background()
 	rule := ok.NewRule("email",
 		ok.NotNil("not-nil"),
-		ok.As(ok.AssertBytes, ok.All(
-			ok.BytesMax(256),
-			ok.BytesMin(3),
-			ok.BytesEncoding(ok.EncodingUTF8),
-		)),
-		ok.As(ok.AssertString, ok.All(
-			ok.StringLength(3, 254),
-			ok.StringContains("@"),
-			ok.Any(
-				ok.StringEndsWith("@jst.dev"),
-				ok.StringEndsWith("@example.com"),
-			),
-			ok.Not(ok.Any(
-				ok.StringIs("monkey@jst.dev"),
-				ok.StringIs("banana@example.com"),
-			)),
-		)),
+		ok.Test("bytes-validation", func(ctx context.Context, v any) error {
+			var bytes []byte
+			switch v := v.(type) {
+			case []byte:
+				bytes = v
+			case string:
+				bytes = []byte(v)
+			default:
+				return fmt.Errorf("value is not []byte or string")
+			}
+			
+			if len(bytes) > 256 {
+				return fmt.Errorf("bytes too long (max: 256, got: %d)", len(bytes))
+			}
+			if len(bytes) < 3 {
+				return fmt.Errorf("bytes too short (min: 3, got: %d)", len(bytes))
+			}
+			if !utf8.Valid(bytes) {
+				return fmt.Errorf("bytes are not valid UTF-8")
+			}
+			return nil
+		}),
+		ok.Test("string-validation", func(ctx context.Context, v any) error {
+			s, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("value is not a string")
+			}
+			
+			if len(s) < 3 || len(s) > 254 {
+				return fmt.Errorf("string length must be between 3 and 254")
+			}
+			if !strings.Contains(s, "@") {
+				return fmt.Errorf("string does not contain @")
+			}
+			if !strings.HasSuffix(s, "@jst.dev") && !strings.HasSuffix(s, "@example.com") {
+				return fmt.Errorf("string does not end with @jst.dev or @example.com")
+			}
+			if s == "monkey@jst.dev" || s == "banana@example.com" {
+				return fmt.Errorf("string is not allowed")
+			}
+			return nil
+		}),
 	)
 
 	res, valid := rule.Validate(ctx, val)

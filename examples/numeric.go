@@ -10,34 +10,41 @@ import (
 
 func Numeric(testString any) {
 	ctx := context.Background()
-	pipeline := ok.Then(
-		ok.All(ok.Test("not-nil", func(ctx context.Context, v any) error {
-			if v == nil { return errors.New("required") }
-			return nil
-		})),
-		func(v any) (int, error) {
-			s, ok := v.(string)
-			if !ok { return 0, errors.New("must be string") }
-			var n int
-			_, err := fmt.Sscanf(s, "%d", &n)
-			if err != nil { return 0, errors.New("must be numeric") }
-			return n, nil
-		},
-		ok.All(
-			ok.Test("range", func(ctx context.Context, n int) error {
-				if n < 10 || n > 100 {
-					return fmt.Errorf("value must be between 10 and 100")
-				}
-				return nil
-			}),
-			ok.Not(ok.Test("not-13", func(ctx context.Context, n int) error {
-				if n == 13 {
-					return nil
-				}
-				return fmt.Errorf("value is not 13")
-			})),
-		))
-	result, ok := pipeline.Validate(ctx, testString)
-	fmt.Printf("valid: %v\n", ok)
+	
+	// Transform and validate as int
+	rule := ok.Test("numeric-validation", func(ctx context.Context, v any) error {
+		// Check not nil
+		if v == nil {
+			return errors.New("required")
+		}
+		
+		// Transform to string
+		s, ok := v.(string)
+		if !ok {
+			return errors.New("must be string")
+		}
+		
+		// Transform to int
+		var n int
+		_, err := fmt.Sscanf(s, "%d", &n)
+		if err != nil {
+			return errors.New("must be numeric")
+		}
+		
+		// Validate range
+		if n < 10 || n > 100 {
+			return fmt.Errorf("value must be between 10 and 100")
+		}
+		
+		// Validate not 13
+		if n == 13 {
+			return fmt.Errorf("value is not 13")
+		}
+		
+		return nil
+	})
+	
+	result, valid := rule.Validate(ctx, testString)
+	fmt.Printf("valid: %v\n", valid)
 	fmt.Println(result.Format())
 }

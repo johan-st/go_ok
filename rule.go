@@ -16,7 +16,6 @@ const (
 	KindAll
 	KindAny
 	KindNot
-	KindThen // Type-narrowing pipeline
 )
 
 // String returns a human-readable representation of the rule kind
@@ -30,8 +29,6 @@ func (k RuleKind) String() string {
 		return "any"
 	case KindNot:
 		return "not"
-	case KindThen:
-		return "then"
 	default:
 		return "unknown"
 	}
@@ -44,11 +41,6 @@ type Rule[T any] struct {
 	Kind     RuleKind
 	TestFn   func(context.Context, T) error // returns error for message
 	Children []*Rule[T]                     // only same-typed children
-
-	// For KindThen: type narrowing support
-	// Transform converts T to U, NextRule validates U
-	Transform func(T) (any, error) // type-erased transform
-	NextRule  *Rule[any]           // type-erased next rule (validates transformed value)
 }
 
 // Test creates a leaf test rule
@@ -87,37 +79,6 @@ func Not[T any](rule *Rule[T]) *Rule[T] {
 	}
 }
 
-// typeEraseRule recursively converts Rule[U] to Rule[any]
-func typeEraseRule[U any](rule *Rule[U]) *Rule[any] {
-	if rule == nil {
-		return nil
-	}
-
-	erased := &Rule[any]{
-		Label: rule.Label,
-		Kind:  rule.Kind,
-	}
-
-	if rule.TestFn != nil {
-		erased.TestFn = func(ctx context.Context, val any) error {
-			u, ok := val.(U)
-			if !ok {
-				return fmt.Errorf("type assertion failed: expected %T, got %T", *new(U), val)
-			}
-			return rule.TestFn(ctx, u)
-		}
-	}
-
-	if len(rule.Children) > 0 {
-		erased.Children = make([]*Rule[any], len(rule.Children))
-		for i, child := range rule.Children {
-			erased.Children[i] = typeEraseRule(child)
-		}
-	}
-
-	return erased
-}
-
 // NewRule creates a labeled rule that combines multiple rules with All combinator
 func NewRule(label string, rules ...*Rule[any]) *Rule[any] {
 	return &Rule[any]{
@@ -130,39 +91,23 @@ func NewRule(label string, rules ...*Rule[any]) *Rule[any] {
 // As creates a type-narrowing/transformation rule from any to T
 // If the transform fails, the As rule fails
 func As[T any](transformFn func(any) (T, error), rule *Rule[T]) *Rule[any] {
-	// Create a pass-through rule that always passes (transform happens in Then)
-	passThrough := Test("as", func(ctx context.Context, val any) error {
+	return Test("as", func(ctx context.Context, val any) error {
+		// Transform the value
+		transformed, err := transformFn(val)
+		if err != nil {
+			return fmt.Errorf("transform failed: %v", err)
+		}
+		
+		// Validate with the rule
+		result, valid := rule.Validate(ctx, transformed)
+		if !valid {
+			return fmt.Errorf("validation failed: %s", result.Message)
+		}
+		
 		return nil
 	})
-
-	// Use Then to create the pipeline: any -> T -> validate
-	transformForThen := func(val any) (T, error) {
-		return transformFn(val)
-	}
-
-	return Then(passThrough, transformForThen, rule)
 }
 
-// Then creates a type-narrowing pipeline as a Rule[T]
-// This is used internally by As
-func Then[T, U any](first *Rule[T], transform func(T) (U, error), next *Rule[U]) *Rule[T] {
-	// Type-erase the transform
-	typeErasedTransform := func(t T) (any, error) {
-		u, err := transform(t)
-		return u, err
-	}
-
-	// Recursively type-erase the next rule
-	typeErasedNext := typeEraseRule(next)
-
-	return &Rule[T]{
-		Label:     "then",
-		Kind:      KindThen,
-		Children:  []*Rule[T]{first}, // Store first rule as child
-		Transform: typeErasedTransform,
-		NextRule:  typeErasedNext,
-	}
-}
 
 // Validate evaluates the rule against the given value with full trace
 func (r *Rule[T]) Validate(ctx context.Context, value T) (*Result, bool) {
@@ -192,8 +137,6 @@ func (r *Rule[T]) validateRecursive(ctx context.Context, value T) *Result {
 		return r.validateAny(ctx, value)
 	case KindNot:
 		return r.validateNot(ctx, value)
-	case KindThen:
-		return r.validateThen(ctx, value)
 	default:
 		return &Result{
 			Status:  StatusFail,
@@ -201,78 +144,6 @@ func (r *Rule[T]) validateRecursive(ctx context.Context, value T) *Result {
 			Kind:    r.Kind,
 			Message: fmt.Sprintf("unknown rule kind: %v", r.Kind),
 		}
-	}
-}
-
-func (r *Rule[T]) validateThen(ctx context.Context, value T) *Result {
-	if r.Transform == nil || r.NextRule == nil {
-		return &Result{
-			Status:  StatusFail,
-			Label:   r.Label,
-			Kind:    KindThen,
-			Message: "then rule missing transform or next rule",
-		}
-	}
-
-	// First validate with the first child rule (if any)
-	var firstResult *Result
-	if len(r.Children) > 0 {
-		firstResult = r.Children[0].validateRecursive(ctx, value)
-		if firstResult.Status == StatusFail {
-			return &Result{
-				Status:   StatusFail,
-				Label:    r.Label,
-				Kind:     KindThen,
-				Message:  "first rule failed",
-				Children: []*Result{firstResult},
-			}
-		}
-	}
-
-	// Transform T -> any
-	transformed, err := r.Transform(value)
-	if err != nil {
-		var children []*Result
-		if firstResult != nil {
-			children = []*Result{firstResult}
-		}
-		return &Result{
-			Status:   StatusFail,
-			Label:    r.Label,
-			Kind:     KindThen,
-			Message:  fmt.Sprintf("transform failed: %v", err),
-			Children: children,
-		}
-	}
-
-	// Validate with NextRule (type-erased to Rule[any])
-	// NextRule.validateRecursive expects any, which matches our transformed value
-	nextResult := r.NextRule.validateRecursive(ctx, transformed)
-
-	// Combine results
-	var status ResultStatus
-	var message string
-	if nextResult.Status == StatusPass {
-		status = StatusPass
-	} else if nextResult.Status == StatusFail {
-		status = StatusFail
-		message = "second rule failed"
-	} else {
-		status = StatusSkip
-	}
-
-	var children []*Result
-	if firstResult != nil {
-		children = append(children, firstResult)
-	}
-	children = append(children, nextResult)
-
-	return &Result{
-		Status:   status,
-		Label:    r.Label,
-		Kind:     KindThen,
-		Message:  message,
-		Children: children,
 	}
 }
 

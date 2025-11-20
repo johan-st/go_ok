@@ -203,13 +203,13 @@ func TestOneOf(t *testing.T) {
 	oneOfRule := OneOf(rule1, rule2, rule3)
 
 	// Test exactly one passes
-	result, ok := oneOfRule.Validate(ctx, 1)
+	_, ok := oneOfRule.Validate(ctx, 1)
 	if !ok {
 		t.Error("Expected OneOf to pass when exactly one rule passes")
 	}
 
 	// Test none pass
-	result, ok = oneOfRule.Validate(ctx, 0)
+	result, ok := oneOfRule.Validate(ctx, 0)
 	if ok {
 		t.Error("Expected OneOf to fail when no rules pass")
 	}
@@ -268,13 +268,13 @@ func TestNewRule(t *testing.T) {
 	}
 
 	// Test NewRule failure
-	result, ok = newRule.Validate(ctx, "hi")
+	_, ok = newRule.Validate(ctx, "hi")
 	if ok {
 		t.Error("Expected NewRule to fail for short string")
 	}
 
 	// Test NewRule with nil
-	result, ok = newRule.Validate(ctx, nil)
+	_, ok = newRule.Validate(ctx, nil)
 	if ok {
 		t.Error("Expected NewRule to fail for nil")
 	}
@@ -317,7 +317,7 @@ func TestAs(t *testing.T) {
 	}
 
 	// Test validation failure after successful transformation
-	result, ok = asRule.Validate(ctx, "hi")
+	_, ok = asRule.Validate(ctx, "hi")
 	if ok {
 		t.Error("Expected As rule to fail for short string")
 	}
@@ -356,19 +356,19 @@ func TestAsWithTransformation(t *testing.T) {
 	}
 
 	// Test transformation failure (not a string)
-	result, ok = asRule.Validate(ctx, 42)
+	_, ok = asRule.Validate(ctx, 42)
 	if ok {
 		t.Error("Expected As rule to fail for non-string")
 	}
 
 	// Test transformation failure (not a number)
-	result, ok = asRule.Validate(ctx, "abc")
+	_, ok = asRule.Validate(ctx, "abc")
 	if ok {
 		t.Error("Expected As rule to fail for non-numeric string")
 	}
 
 	// Test validation failure after successful transformation
-	result, ok = asRule.Validate(ctx, "5")
+	_, ok = asRule.Validate(ctx, "5")
 	if ok {
 		t.Error("Expected As rule to fail for out of range value")
 	}

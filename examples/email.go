@@ -31,6 +31,6 @@ func Email(testString string) {
 		}),
 	)
 	res, valid := emailRule.Validate(ctx, testString)
-	fmt.Printf("valid: %v, result:\n%s", valid, res.Format())
+	fmt.Printf("valid: %v\n", valid)
 	fmt.Println(res.Format())
 }
