@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // RuleKind represents the type of rule node
@@ -43,11 +44,11 @@ type Rule[T any] struct {
 	Kind     RuleKind
 	TestFn   func(context.Context, T) error // returns error for message
 	Children []*Rule[T]                     // only same-typed children
-	
+
 	// For KindThen: type narrowing support
 	// Transform converts T to U, NextRule validates U
 	Transform func(T) (any, error) // type-erased transform
-	NextRule *Rule[any]            // type-erased next rule (validates transformed value)
+	NextRule  *Rule[any]           // type-erased next rule (validates transformed value)
 }
 
 // Test creates a leaf test rule
@@ -91,12 +92,12 @@ func typeEraseRule[U any](rule *Rule[U]) *Rule[any] {
 	if rule == nil {
 		return nil
 	}
-	
+
 	erased := &Rule[any]{
 		Label: rule.Label,
 		Kind:  rule.Kind,
 	}
-	
+
 	if rule.TestFn != nil {
 		erased.TestFn = func(ctx context.Context, val any) error {
 			u, ok := val.(U)
@@ -106,14 +107,14 @@ func typeEraseRule[U any](rule *Rule[U]) *Rule[any] {
 			return rule.TestFn(ctx, u)
 		}
 	}
-	
+
 	if len(rule.Children) > 0 {
 		erased.Children = make([]*Rule[any], len(rule.Children))
 		for i, child := range rule.Children {
 			erased.Children[i] = typeEraseRule(child)
 		}
 	}
-	
+
 	return erased
 }
 
@@ -133,12 +134,12 @@ func As[T any](transformFn func(any) (T, error), rule *Rule[T]) *Rule[any] {
 	passThrough := Test("as", func(ctx context.Context, val any) error {
 		return nil
 	})
-	
+
 	// Use Then to create the pipeline: any -> T -> validate
 	transformForThen := func(val any) (T, error) {
 		return transformFn(val)
 	}
-	
+
 	return Then(passThrough, transformForThen, rule)
 }
 
@@ -150,10 +151,10 @@ func Then[T, U any](first *Rule[T], transform func(T) (U, error), next *Rule[U])
 		u, err := transform(t)
 		return u, err
 	}
-	
+
 	// Recursively type-erase the next rule
 	typeErasedNext := typeEraseRule(next)
-	
+
 	return &Rule[T]{
 		Label:     "then",
 		Kind:      KindThen,
@@ -428,11 +429,14 @@ func NotNil(label string) *Rule[any] {
 
 // AssertBytes is a transform function that converts any to []byte
 func AssertBytes(v any) ([]byte, error) {
-	b, ok := v.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("value is not []byte")
+	switch v := v.(type) {
+	case []byte:
+		return v, nil
+	case string:
+		return []byte(v), nil
+	default:
+		return nil, fmt.Errorf("value is not []byte or string")
 	}
-	return b, nil
 }
 
 // AssertString is a transform function that converts any to string
@@ -469,15 +473,21 @@ type Encoding int
 
 const (
 	EncodingUTF8 Encoding = iota
-	EncodingUTF16
-	EncodingUTF32
 )
 
 // BytesEncoding creates a rule for byte encoding validation
 func BytesEncoding(enc Encoding) *Rule[[]byte] {
 	return Test("bytes-encoding", func(ctx context.Context, value []byte) error {
 		// Basic encoding check - can be enhanced later
-		_ = enc
+		switch enc {
+		case EncodingUTF8:
+			if !utf8.Valid(value) {
+				return fmt.Errorf("bytes are not valid UTF-8")
+			}
+		default:
+			return errors.New("unknown encoding")
+		}
+
 		return nil
 	})
 }

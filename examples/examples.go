@@ -17,7 +17,7 @@ func RunBasicExamples() {
 	// Example 1: Basic String Validation
 	fmt.Println("1. Basic String Validation")
 	fmt.Println("-------------------------")
-	
+
 	stringRule := ok.All(
 		ok.Test("not-empty", func(ctx context.Context, s string) error {
 			if s == "" {
@@ -56,7 +56,7 @@ func RunBasicExamples() {
 	// Example 2: Short-Circuit Behavior
 	fmt.Println("\n\n2. Short-Circuit Behavior")
 	fmt.Println("-------------------------")
-	
+
 	failRule1 := ok.Test("fail1", func(ctx context.Context, n int) error {
 		return errors.New("first failure")
 	})
@@ -82,7 +82,7 @@ func RunBasicExamples() {
 	// Example 3: Numeric Validation
 	fmt.Println("\n\n3. Numeric Validation")
 	fmt.Println("---------------------")
-	
+
 	intRule := ok.Test("range", func(ctx context.Context, n int) error {
 		if n < 10 || n > 100 {
 			return fmt.Errorf("value must be between 10 and 100")
@@ -107,17 +107,13 @@ func RunBasicExamples() {
 }
 
 func Wip(val any) {
-	ctx := context.Background()
+	ctx:= context.Background()
 	rule := ok.NewRule("email",
 		ok.NotNil("not-nil"),
 		ok.As(ok.AssertBytes, ok.All(
 			ok.BytesMax(256),
 			ok.BytesMin(3),
-			ok.OneOf(
-				ok.BytesEncoding(ok.EncodingUTF8),
-				ok.BytesEncoding(ok.EncodingUTF16),
-				ok.BytesEncoding(ok.EncodingUTF32),
-			),
+			ok.BytesEncoding(ok.EncodingUTF8),
 		)),
 		ok.As(ok.AssertString, ok.All(
 			ok.StringLength(3, 254),
