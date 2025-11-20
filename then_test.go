@@ -167,8 +167,6 @@ func TestChainThen(t *testing.T) {
 		_, err := fmt.Sscanf(s, "%d", &n)
 		return n, err
 	}
-	secondRule := NumericRange(10, 100)
-	pipeline1 := Then(firstRule, transform1, secondRule)
 
 	// Chain: int -> string
 	transform2 := func(n int) (string, error) {
@@ -181,7 +179,8 @@ func TestChainThen(t *testing.T) {
 		return nil
 	})
 
-	pipeline2 := ChainThen(pipeline1, transform2, thirdRule)
+	// ChainThen now takes first rule, both transforms, and final rule
+	pipeline2 := ChainThen(firstRule, transform1, transform2, thirdRule)
 
 	// Test successful chain
 	result, ok := pipeline2.Validate(ctx, "50")
@@ -218,14 +217,13 @@ func TestThenString(t *testing.T) {
 
 	pipeline := Then(firstRule, transform, secondRule)
 	str := pipeline.String()
-	if !strings.Contains(str, "ThenRule") {
-		t.Errorf("Expected String to contain 'ThenRule', got '%s'", str)
+	// Now returns Rule format: "then[T](N children)" instead of ThenRule format
+	if !strings.Contains(str, "then") {
+		t.Errorf("Expected String to contain 'then', got '%s'", str)
 	}
-	if !strings.Contains(str, "first") {
-		t.Errorf("Expected String to contain first rule label, got '%s'", str)
-	}
-	if !strings.Contains(str, "second") {
-		t.Errorf("Expected String to contain second rule label, got '%s'", str)
+	// The String() method shows the rule kind and type, not individual labels
+	if pipeline.Kind != KindThen {
+		t.Errorf("Expected Kind to be KindThen, got %v", pipeline.Kind)
 	}
 }
 

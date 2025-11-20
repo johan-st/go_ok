@@ -12,36 +12,30 @@ type ThenRule[T, U any] struct {
 	Second    *Rule[U]
 }
 
-// Then creates a type-narrowing pipeline that validates a value of type T,
-// transforms it to type U, then validates the transformed value.
-//
-// # Example:
-//
-// 	pipeline := ok.Then(
-// 		ok.All(ok.Test("not-nil", func(ctx context.Context, v any) error {
-// 			if v == nil { return errors.New("required") }
-// 			return nil
-// 		})),
-// 		func(v any) (int, error) {
-// 			s, ok := v.(string)
-// 			if !ok { return 0, errors.New("must be string") }
-// 			var n int
-// 			_, err := fmt.Sscanf(s, "%d", &n)
-// 			if err != nil { return 0, errors.New("must be numeric") }
-// 			return n, nil
-// 		},
-// 		ok.All(
-// 			ok.NumericRange(10, 100),
-// 			ok.Not(ok.NumericRange(13,13)),
-// 		))
-// 	result, ok := pipeline.Validate(ctx, testString)
-func Then[T, U any](rule *Rule[T], transform func(T) (U, error), next *Rule[U]) *ThenRule[T, U] {
-	return &ThenRule[T, U]{
-		First:     rule,
-		Transform: transform,
-		Second:    next,
-	}
+// ThenRuleBuilder provides fluent chaining for Rule construction with type narrowing
+// Now returns *Rule[T] instead of *ThenRule[T, U]
+type ThenRuleBuilder[T, U any] struct {
+	first     *Rule[T]
+	transform func(T) (U, error)
 }
+
+// All creates a Rule with All combinator on the second rule
+func (trb *ThenRuleBuilder[T, U]) All(rules ...*Rule[U]) *Rule[T] {
+	return Then(trb.first, trb.transform, All(rules...))
+}
+
+// Any creates a Rule with Any combinator on the second rule
+func (trb *ThenRuleBuilder[T, U]) Any(rules ...*Rule[U]) *Rule[T] {
+	return Then(trb.first, trb.transform, Any(rules...))
+}
+
+// Rule creates a Rule with a single rule
+func (trb *ThenRuleBuilder[T, U]) Rule(rule *Rule[U]) *Rule[T] {
+	return Then(trb.first, trb.transform, rule)
+}
+
+// Then is now defined in rule.go and returns *Rule[T] instead of *ThenRule[T, U]
+// This file maintains ThenRule for backward compatibility during migration
 
 // Validate evaluates the Then pipeline with full trace
 func (tr *ThenRule[T, U]) Validate(ctx context.Context, value T) (*Result, bool) {
@@ -110,23 +104,45 @@ func (tr *ThenRule[T, U]) validateRecursive(ctx context.Context, value T) *Resul
 	}
 }
 
-// ChainThen allows chaining multiple ThenRule operations
-func ChainThen[T, U, V any](tr *ThenRule[T, U], transform func(U) (V, error), next *Rule[V]) *ThenRule[T, V] {
-	// Create a new ThenRule that composes the transforms
+// All creates a new ThenRule with All combinator on the second rule
+func (tr *ThenRule[T, U]) All(rules ...*Rule[U]) *ThenRule[T, U] {
+	return &ThenRule[T, U]{
+		First:     tr.First,
+		Transform: tr.Transform,
+		Second:    All(rules...),
+	}
+}
+
+// Any creates a new ThenRule with Any combinator on the second rule
+func (tr *ThenRule[T, U]) Any(rules ...*Rule[U]) *ThenRule[T, U] {
+	return &ThenRule[T, U]{
+		First:     tr.First,
+		Transform: tr.Transform,
+		Second:    Any(rules...),
+	}
+}
+
+// ChainThen allows chaining multiple Then operations
+// Now works with Rule[T] instead of ThenRule[T, U]
+func ChainThen[T, U, V any](first *Rule[T], firstTransform func(T) (U, error), secondTransform func(U) (V, error), next *Rule[V]) *Rule[T] {
+	// Create a composed transform T -> V
 	composedTransform := func(t T) (V, error) {
-		u, err := tr.Transform(t)
+		u, err := firstTransform(t)
 		if err != nil {
 			var zero V
 			return zero, err
 		}
-		return transform(u)
+		return secondTransform(u)
 	}
 
-	return &ThenRule[T, V]{
-		First:     tr.First,
-		Transform: composedTransform,
-		Second:    next,
-	}
+	return Then(first, composedTransform, next)
+}
+
+// ThenString is a convenience helper for the common pattern of validating any -> string
+// It combines NotNil check, AsString transform, and string rules
+// Now returns *Rule[any] instead of *ThenRule[any, string]
+func ThenString(first *Rule[any], rules ...*Rule[string]) *Rule[any] {
+	return Then(first, AsString, All(rules...))
 }
 
 // String returns a human-readable representation of the ThenRule

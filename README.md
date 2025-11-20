@@ -43,22 +43,26 @@ func main() {
         fmt.Println(result.Format())
     }
     
-    // Type-safe pipeline
-    pipeline := Then(
-        All(Test("not-nil", func(ctx context.Context, v any) error {
-            if v == nil { return errors.New("required") }
-            return nil
-        })),
-        func(v any) (string, error) {
-            s, ok := v.(string)
-            if !ok { return "", errors.New("must be string") }
-            return s, nil
-        },
-        All(NotEmpty("string")),
+    // Type-safe pipeline (improved ergonomics)
+    // Option 1: Most ergonomic - NotNilThenString helper
+    pipeline := NotNilThenString("value",
+        NotEmpty("string"),
+        StringLength(5, 100),
     )
     
     result, ok = pipeline.Validate(ctx, "hello")
     fmt.Printf("Pipeline result: %v\n", ok)
+    
+    // Option 2: Using builder pattern for type narrowing (most fluent)
+    pipeline2 := ThenFrom(NotNilBuilder("value"), AsString).
+        All(NotEmpty("string"), StringLength(5, 100))
+    
+    // Option 3: Manual Then with All combinator
+    pipeline3 := Then(
+        NotNil("value"),
+        AsString,
+        All(NotEmpty("string"), StringLength(5, 100)),
+    )
 }
 ```
 
@@ -94,6 +98,9 @@ All[T](...rules)                      // AND combinator
 Any[T](...rules)                      // OR combinator  
 Not[T](rule)                          // Negation
 Then[T,U](rule, transform, nextRule)  // Type-narrowing pipeline
+ThenFrom[T,U](builder, transform)     // Builder-based type narrowing
+ThenString(rule, ...stringRules)       // Convenience: any -> string pipeline
+NotNilThenString(label, ...stringRules) // Most ergonomic: NotNil -> string rules
 ChainThen[T,U,V](thenRule, transform, nextRule) // Chain pipelines
 ```
 
@@ -104,6 +111,10 @@ Required[T](label)                    // Non-zero value check
 Optional[T](rule)                     // Skip validation for zero values
 OneOf[T](...rules)                    // Exactly one rule must pass
 AtLeastN[T](n, ...rules)              // At least N rules must pass
+NotNil(label)                         // Non-nil check for any type
+NotNilThenString(label, ...rules)     // Convenience: NotNil -> string validation
+IsString()                            // Type check: any -> string
+AsString(v)                           // Transform: any -> string
 StringLength(min, max)                // String length validation
 NotEmpty(label)                       // Non-empty string check
 NumericRange[T](min, max)             // Numeric range validation
